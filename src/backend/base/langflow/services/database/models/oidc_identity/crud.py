@@ -18,27 +18,16 @@ if TYPE_CHECKING:
     from sqlmodel.sql.expression import SelectOfScalar
 
 
-async def get_oidc_identity_by_provider_and_subject(
-    session: AsyncSession, provider_name: str, provider_user_id: str
-) -> OIDCIdentity | None:
-    """Get OIDC identity by provider name and subject ID."""
-    query: SelectOfScalar = (
-        select(OIDCIdentity)
-        .options(selectinload(OIDCIdentity.user))
-        .where(
-            and_(
-                OIDCIdentity.provider_name == provider_name,
-                OIDCIdentity.provider_user_id == provider_user_id,
-            )
-        )
-    )
-    return (await session.exec(query)).first()
-
-
 async def get_oidc_identity_by_issuer_and_subject(
     session: AsyncSession, issuer: str, provider_user_id: str
 ) -> OIDCIdentity | None:
-    """Get OIDC identity by issuer and subject ID (more precise than provider_name)."""
+    """Get OIDC identity by issuer and subject ID.
+
+    This is the canonical way to look up OIDC identities. We use the issuer
+    (from the ID token's iss claim) rather than provider_name (from config)
+    because the issuer is stable and uniquely identifies the OIDC provider,
+    while provider_name can be changed by admins.
+    """
     query: SelectOfScalar = (
         select(OIDCIdentity)
         .options(selectinload(OIDCIdentity.user))

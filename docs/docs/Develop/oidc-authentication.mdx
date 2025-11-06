@@ -568,6 +568,44 @@ spec:
 
 ---
 
+## Known Limitations
+
+### Multi-Instance Deployments
+
+:::warning Important for Production
+The current OIDC implementation uses **in-memory state storage** which has the following limitations:
+
+1. **Does not work with multiple Langflow instances** (load balancers, Kubernetes replicas with >1 pod)
+2. **State is lost on server restart** (users mid-authentication will need to retry)
+3. **No automatic cleanup** of expired state tokens
+
+**Impact**: In a load-balanced environment, if a user's callback request is routed to a different instance than where they initiated login, authentication will fail with "Invalid state parameter".
+:::
+
+#### Workaround for Multi-Instance Deployments
+
+Until state storage is migrated to Redis/database, use one of these approaches:
+
+**Option 1: Session Affinity (Sticky Sessions)**
+Configure your load balancer to use sticky sessions based on cookies:
+
+```yaml
+# Example for Kubernetes with NGINX Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "langflow-oidc"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "300"
+```
+
+**Option 2: Single Instance**
+Run only one Langflow instance when using OIDC authentication.
+
+**Option 3: Implement Redis Storage (Contribution Welcome)**
+The codebase is structured to easily swap in Redis storage. See `/home/user/langflow/src/backend/base/langflow/api/v1/oidc.py` line 29-38.
+
+---
+
 ## Troubleshooting
 
 ### "Invalid state parameter" Error

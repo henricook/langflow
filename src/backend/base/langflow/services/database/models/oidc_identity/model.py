@@ -16,13 +16,26 @@ def utc_now():
 
 class OIDCIdentityBase(SQLModel):
     provider_name: str = Field(index=True, nullable=False)
-    """Display name of the OIDC provider (e.g., 'Azure AD', 'Google')"""
+    """Display name of the OIDC provider (e.g., 'Azure AD', 'Google').
+
+    Note: This is for display purposes only and comes from the OIDC_PROVIDER_NAME
+    config setting. Do NOT use this for identity matching as admins can change it.
+    Use issuer + provider_user_id for identity matching instead.
+    """
 
     provider_user_id: str = Field(index=True, nullable=False)
-    """Subject identifier (sub claim) from the OIDC provider"""
+    """Subject identifier (sub claim) from the OIDC provider.
+
+    This is unique per user within a given issuer/provider.
+    """
 
     issuer: str = Field(index=True, nullable=False)
-    """Issuer URL from the OIDC ID token (iss claim)"""
+    """Issuer URL from the OIDC ID token (iss claim).
+
+    This uniquely identifies the OIDC provider and is stable. Together with
+    provider_user_id, this forms the canonical identity. There is a unique
+    constraint on (issuer, provider_user_id).
+    """
 
     email: str = Field(index=True, nullable=False)
     """Email address from OIDC claims"""
