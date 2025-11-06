@@ -27,15 +27,43 @@ async def login_to_get_access_token(
     db: DbSession,
 ):
     auth_settings = get_settings_service().auth_settings
-    try:
-        user = await authenticate_user(form_data.username, form_data.password, db)
-    except Exception as exc:
-        if isinstance(exc, HTTPException):
-            raise
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
-        ) from exc
+
+    # Check if local auth is disabled when OIDC is enabled
+    if auth_settings.OIDC_ENABLED and auth_settings.OIDC_DISABLE_LOCAL_AUTH:
+        # Check if this is the superuser (emergency access)
+        if auth_settings.OIDC_ALLOW_SUPERUSER_LOCAL_AUTH:
+            # Try to authenticate to check if user is superuser
+            try:
+                user = await authenticate_user(form_data.username, form_data.password, db)
+                if not user.is_superuser:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Local authentication is disabled. Please sign in with OIDC.",
+                    )
+                # Continue with login for superuser below
+            except HTTPException as exc:
+                # If it's our FORBIDDEN error, re-raise it
+                if exc.status_code == status.HTTP_403_FORBIDDEN:
+                    raise
+                # If authentication failed (401), re-raise the original error
+                raise
+        else:
+            # No exceptions - local auth completely disabled
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Local authentication is disabled. Please sign in with OIDC.",
+            )
+    else:
+        # Normal local authentication flow
+        try:
+            user = await authenticate_user(form_data.username, form_data.password, db)
+        except Exception as exc:
+            if isinstance(exc, HTTPException):
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            ) from exc
 
     if user:
         tokens = await create_user_tokens(user_id=user.id, db=db, update_last_login=True)

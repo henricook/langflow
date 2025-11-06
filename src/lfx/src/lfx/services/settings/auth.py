@@ -71,6 +71,106 @@ class AuthSettings(BaseSettings):
     COOKIE_DOMAIN: str | None = None
     """The domain attribute of the cookies. If None, the domain is not set."""
 
+    # OIDC Settings
+    OIDC_ENABLED: bool = Field(
+        default=False,
+        description="Enable OpenID Connect (OIDC) authentication for SSO with providers like Azure AD, Google, Okta, etc.",
+    )
+    """If True, enables OIDC authentication."""
+
+    OIDC_PROVIDER_NAME: str | None = Field(
+        default=None,
+        description="Display name for the OIDC provider (e.g., 'Azure AD', 'Google', 'Okta'). Shown on login button.",
+    )
+    """Display name for the OIDC provider shown to users."""
+
+    OIDC_CLIENT_ID: str | None = Field(
+        default=None,
+        description="OAuth2 Client ID from your OIDC provider.",
+    )
+    """OAuth2 Client ID from OIDC provider."""
+
+    OIDC_CLIENT_SECRET: SecretStr | None = Field(
+        default=None,
+        description="OAuth2 Client Secret from your OIDC provider.",
+    )
+    """OAuth2 Client Secret from OIDC provider."""
+
+    OIDC_ISSUER_URL: str | None = Field(
+        default=None,
+        description=(
+            "OIDC Issuer URL (e.g., https://login.microsoftonline.com/{tenant}/v2.0 for Azure AD, "
+            "https://accounts.google.com for Google). Used for OIDC discovery."
+        ),
+    )
+    """OIDC Issuer URL for discovery."""
+
+    OIDC_REDIRECT_URI: str | None = Field(
+        default=None,
+        description="Redirect URI for OIDC callback (e.g., https://your-domain.com/api/v1/auth/oidc/callback).",
+    )
+    """OAuth2 redirect URI for OIDC callback."""
+
+    OIDC_AUTHORIZATION_ENDPOINT: str | None = Field(
+        default=None,
+        description="Optional: Override the authorization endpoint URL if OIDC discovery is not supported.",
+    )
+    """Optional authorization endpoint override."""
+
+    OIDC_TOKEN_ENDPOINT: str | None = Field(
+        default=None,
+        description="Optional: Override the token endpoint URL if OIDC discovery is not supported.",
+    )
+    """Optional token endpoint override."""
+
+    OIDC_USERINFO_ENDPOINT: str | None = Field(
+        default=None,
+        description="Optional: Override the userinfo endpoint URL if OIDC discovery is not supported.",
+    )
+    """Optional userinfo endpoint override."""
+
+    OIDC_JWKS_URI: str | None = Field(
+        default=None,
+        description="Optional: Override the JWKS URI if OIDC discovery is not supported.",
+    )
+    """Optional JWKS URI override."""
+
+    OIDC_SCOPES: str = Field(
+        default="openid profile email",
+        description="OAuth2 scopes to request. Should include 'openid' at minimum.",
+    )
+    """OAuth2 scopes to request from OIDC provider."""
+
+    OIDC_AUTO_PROVISION_USERS: bool = Field(
+        default=True,
+        description="Automatically create user accounts when users log in via OIDC for the first time.",
+    )
+    """If True, automatically creates users on first OIDC login."""
+
+    OIDC_REQUIRE_EMAIL_VERIFIED: bool = Field(
+        default=True,
+        description="Require email verification from OIDC provider. Rejects login if email_verified claim is false.",
+    )
+    """If True, requires email_verified claim to be true."""
+
+    OIDC_DISABLE_LOCAL_AUTH: bool = Field(
+        default=False,
+        description=(
+            "Disable username/password authentication when OIDC is enabled. "
+            "Forces all users to authenticate via OIDC (SSO-only mode)."
+        ),
+    )
+    """If True, disables local username/password authentication."""
+
+    OIDC_ALLOW_SUPERUSER_LOCAL_AUTH: bool = Field(
+        default=True,
+        description=(
+            "Allow superuser to login with username/password even when OIDC_DISABLE_LOCAL_AUTH is True. "
+            "Provides emergency access if OIDC provider is unavailable."
+        ),
+    )
+    """If True, allows superuser emergency access via local auth."""
+
     pwd_context: CryptContext = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     model_config = SettingsConfigDict(validate_assignment=True, extra="ignore", env_prefix="LANGFLOW_")

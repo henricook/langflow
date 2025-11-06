@@ -1,0 +1,652 @@
+---
+title: OIDC Authentication
+slug: /develop-oidc-authentication
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# OIDC Authentication (SSO)
+
+Langflow supports OpenID Connect (OIDC) authentication for enterprise Single Sign-On (SSO) deployments. This allows you to integrate with identity providers like Azure AD (Microsoft Entra ID), Google Workspace, Okta, Auth0, Keycloak, and any other OIDC-compliant provider.
+
+## Benefits
+
+- **Enterprise SSO**: Use your organization's existing identity provider
+- **Centralized access control**: Manage users in one place
+- **Enhanced security**: Leverage MFA and conditional access policies from your IdP
+- **Automatic provisioning**: Users are created automatically on first login
+- **No password management**: Users authenticate through your identity provider
+
+## Quick Start
+
+To enable OIDC authentication, configure these environment variables:
+
+```bash
+LANGFLOW_OIDC_ENABLED=true
+LANGFLOW_OIDC_PROVIDER_NAME="Your Provider"
+LANGFLOW_OIDC_CLIENT_ID=your-client-id
+LANGFLOW_OIDC_CLIENT_SECRET=your-client-secret
+LANGFLOW_OIDC_ISSUER_URL=https://your-provider-issuer-url
+LANGFLOW_OIDC_REDIRECT_URI=https://your-langflow-domain.com/api/v1/auth/oidc/callback
+```
+
+## Configuration Reference
+
+### Required Settings
+
+| Environment Variable | Description | Example |
+|---------------------|-------------|---------|
+| `LANGFLOW_OIDC_ENABLED` | Enable OIDC authentication | `true` |
+| `LANGFLOW_OIDC_CLIENT_ID` | OAuth2 Client ID from your provider | `abc123...` |
+| `LANGFLOW_OIDC_CLIENT_SECRET` | OAuth2 Client Secret | `secret123...` |
+| `LANGFLOW_OIDC_ISSUER_URL` | OIDC Issuer URL (used for discovery) | `https://accounts.google.com` |
+| `LANGFLOW_OIDC_REDIRECT_URI` | Callback URL for your Langflow instance | `https://langflow.example.com/api/v1/auth/oidc/callback` |
+
+### Optional Settings
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `LANGFLOW_OIDC_PROVIDER_NAME` | Display name shown on login button | `"OIDC"` |
+| `LANGFLOW_OIDC_SCOPES` | OAuth2 scopes to request | `"openid profile email"` |
+| `LANGFLOW_OIDC_AUTO_PROVISION_USERS` | Automatically create users on first login | `true` |
+| `LANGFLOW_OIDC_REQUIRE_EMAIL_VERIFIED` | Require email verification from IdP | `true` |
+| `LANGFLOW_OIDC_DISABLE_LOCAL_AUTH` | Disable username/password authentication | `false` |
+| `LANGFLOW_OIDC_ALLOW_SUPERUSER_LOCAL_AUTH` | Allow superuser emergency access via local auth | `true` |
+
+### Advanced Settings (Override Discovery)
+
+These are optional and only needed if your provider doesn't support OIDC discovery:
+
+| Environment Variable | Description |
+|---------------------|-------------|
+| `LANGFLOW_OIDC_AUTHORIZATION_ENDPOINT` | Override authorization endpoint URL |
+| `LANGFLOW_OIDC_TOKEN_ENDPOINT` | Override token endpoint URL |
+| `LANGFLOW_OIDC_USERINFO_ENDPOINT` | Override userinfo endpoint URL |
+| `LANGFLOW_OIDC_JWKS_URI` | Override JWKS URI |
+
+## Provider Setup Guides
+
+### Azure AD (Microsoft Entra ID)
+
+#### 1. Register Application in Azure Portal
+
+1. Go to [Azure Portal](https://portal.azure.com/) → **Azure Active Directory** → **App registrations**
+2. Click **New registration**
+3. Configure:
+   - **Name**: `Langflow OIDC`
+   - **Supported account types**: Choose based on your needs
+   - **Redirect URI**:
+     - Type: `Web`
+     - URI: `https://your-langflow-domain.com/api/v1/auth/oidc/callback`
+4. Click **Register**
+
+#### 2. Configure Authentication
+
+1. In your app registration, go to **Authentication**
+2. Under **Implicit grant and hybrid flows**:
+   - ✅ Check **ID tokens (used for implicit and hybrid flows)**
+3. Click **Save**
+
+#### 3. Create Client Secret
+
+1. Go to **Certificates & secrets** → **Client secrets**
+2. Click **New client secret**
+3. Add description: `Langflow OIDC Secret`
+4. Choose expiration period
+5. Click **Add**
+6. **Copy the secret value immediately** (you won't be able to see it again)
+
+#### 4. Configure API Permissions
+
+1. Go to **API permissions**
+2. Ensure these Microsoft Graph permissions are granted:
+   - `openid`
+   - `profile`
+   - `email`
+3. Click **Grant admin consent** (if required)
+
+#### 5. Get Configuration Values
+
+- **Client ID**: Found on the **Overview** page (Application/Client ID)
+- **Tenant ID**: Found on the **Overview** page (Directory/Tenant ID)
+- **Client Secret**: The value you copied in step 3
+
+#### 6. Configure Langflow
+
+<Tabs groupId="deployment">
+<TabItem value="docker" label="Docker">
+
+```yaml
+# docker-compose.yml
+environment:
+  LANGFLOW_OIDC_ENABLED: "true"
+  LANGFLOW_OIDC_PROVIDER_NAME: "Microsoft"
+  LANGFLOW_OIDC_CLIENT_ID: "your-application-client-id"
+  LANGFLOW_OIDC_CLIENT_SECRET: "your-client-secret"
+  LANGFLOW_OIDC_ISSUER_URL: "https://login.microsoftonline.com/{tenant-id}/v2.0"
+  LANGFLOW_OIDC_REDIRECT_URI: "https://your-langflow-domain.com/api/v1/auth/oidc/callback"
+  LANGFLOW_OIDC_SCOPES: "openid profile email"
+```
+
+</TabItem>
+<TabItem value="kubernetes" label="Kubernetes">
+
+```yaml
+# langflow-deployment.yaml
+env:
+  - name: LANGFLOW_OIDC_ENABLED
+    value: "true"
+  - name: LANGFLOW_OIDC_PROVIDER_NAME
+    value: "Microsoft"
+  - name: LANGFLOW_OIDC_CLIENT_ID
+    value: "your-application-client-id"
+  - name: LANGFLOW_OIDC_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: langflow-oidc-secret
+        key: client-secret
+  - name: LANGFLOW_OIDC_ISSUER_URL
+    value: "https://login.microsoftonline.com/{tenant-id}/v2.0"
+  - name: LANGFLOW_OIDC_REDIRECT_URI
+    value: "https://your-langflow-domain.com/api/v1/auth/oidc/callback"
+```
+
+</TabItem>
+<TabItem value="env" label="Environment File">
+
+```bash
+# .env
+LANGFLOW_OIDC_ENABLED=true
+LANGFLOW_OIDC_PROVIDER_NAME="Microsoft"
+LANGFLOW_OIDC_CLIENT_ID=your-application-client-id
+LANGFLOW_OIDC_CLIENT_SECRET=your-client-secret
+LANGFLOW_OIDC_ISSUER_URL=https://login.microsoftonline.com/{tenant-id}/v2.0
+LANGFLOW_OIDC_REDIRECT_URI=https://your-langflow-domain.com/api/v1/auth/oidc/callback
+```
+
+</TabItem>
+</Tabs>
+
+:::tip
+Replace `{tenant-id}` with your actual Azure AD tenant ID. For multi-tenant applications, you can use `common`, `organizations`, or `consumers` instead of the tenant ID.
+:::
+
+---
+
+### Google Workspace
+
+#### 1. Create OAuth 2.0 Client
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Select or create a project
+3. Go to **APIs & Services** → **Credentials**
+4. Click **Create Credentials** → **OAuth client ID**
+5. If prompted, configure the OAuth consent screen first:
+   - User Type: **Internal** (for Google Workspace) or **External**
+   - App name: `Langflow`
+   - Support email: Your email
+   - Scopes: Add `openid`, `profile`, `email`
+
+#### 2. Configure OAuth Client
+
+1. Application type: **Web application**
+2. Name: `Langflow OIDC`
+3. **Authorized redirect URIs**:
+   - Add: `https://your-langflow-domain.com/api/v1/auth/oidc/callback`
+4. Click **Create**
+5. **Copy the Client ID and Client Secret**
+
+#### 3. Configure Langflow
+
+<Tabs groupId="deployment">
+<TabItem value="docker" label="Docker">
+
+```yaml
+# docker-compose.yml
+environment:
+  LANGFLOW_OIDC_ENABLED: "true"
+  LANGFLOW_OIDC_PROVIDER_NAME: "Google"
+  LANGFLOW_OIDC_CLIENT_ID: "your-client-id.apps.googleusercontent.com"
+  LANGFLOW_OIDC_CLIENT_SECRET: "your-client-secret"
+  LANGFLOW_OIDC_ISSUER_URL: "https://accounts.google.com"
+  LANGFLOW_OIDC_REDIRECT_URI: "https://your-langflow-domain.com/api/v1/auth/oidc/callback"
+```
+
+</TabItem>
+<TabItem value="env" label="Environment File">
+
+```bash
+# .env
+LANGFLOW_OIDC_ENABLED=true
+LANGFLOW_OIDC_PROVIDER_NAME="Google"
+LANGFLOW_OIDC_CLIENT_ID=your-client-id.apps.googleusercontent.com
+LANGFLOW_OIDC_CLIENT_SECRET=your-client-secret
+LANGFLOW_OIDC_ISSUER_URL=https://accounts.google.com
+LANGFLOW_OIDC_REDIRECT_URI=https://your-langflow-domain.com/api/v1/auth/oidc/callback
+```
+
+</TabItem>
+</Tabs>
+
+:::info Domain Restriction
+To restrict access to specific Google Workspace domains, configure this in the OAuth consent screen settings under "Authorized domains".
+:::
+
+---
+
+### Okta
+
+#### 1. Create Application in Okta
+
+1. Go to your [Okta Admin Console](https://your-domain.okta.com/admin)
+2. Go to **Applications** → **Applications**
+3. Click **Create App Integration**
+4. Choose:
+   - **Sign-in method**: OIDC - OpenID Connect
+   - **Application type**: Web Application
+5. Click **Next**
+
+#### 2. Configure Application
+
+1. **App integration name**: `Langflow`
+2. **Grant type**:
+   - ✅ Authorization Code
+3. **Sign-in redirect URIs**:
+   - Add: `https://your-langflow-domain.com/api/v1/auth/oidc/callback`
+4. **Assignments**: Choose who can access (Everyone, specific groups, etc.)
+5. Click **Save**
+
+#### 3. Get Configuration
+
+- **Client ID**: Shown on the application's **General** tab
+- **Client Secret**: Click to reveal/copy
+- **Okta domain**: Your Okta domain (e.g., `https://your-domain.okta.com`)
+
+#### 4. Configure Langflow
+
+```bash
+# .env
+LANGFLOW_OIDC_ENABLED=true
+LANGFLOW_OIDC_PROVIDER_NAME="Okta"
+LANGFLOW_OIDC_CLIENT_ID=your-okta-client-id
+LANGFLOW_OIDC_CLIENT_SECRET=your-okta-client-secret
+LANGFLOW_OIDC_ISSUER_URL=https://your-domain.okta.com
+LANGFLOW_OIDC_REDIRECT_URI=https://your-langflow-domain.com/api/v1/auth/oidc/callback
+```
+
+---
+
+### Auth0
+
+#### 1. Create Application
+
+1. Go to [Auth0 Dashboard](https://manage.auth0.com/)
+2. Go to **Applications** → **Applications**
+3. Click **Create Application**
+4. Name: `Langflow`
+5. Application Type: **Regular Web Applications**
+6. Click **Create**
+
+#### 2. Configure Application
+
+1. Go to the **Settings** tab
+2. **Allowed Callback URLs**:
+   - Add: `https://your-langflow-domain.com/api/v1/auth/oidc/callback`
+3. **Allowed Logout URLs** (optional):
+   - Add: `https://your-langflow-domain.com`
+4. Click **Save Changes**
+
+#### 3. Get Configuration
+
+- **Domain**: Found in Settings (e.g., `your-tenant.auth0.com`)
+- **Client ID**: Found in Settings
+- **Client Secret**: Found in Settings
+
+#### 4. Configure Langflow
+
+```bash
+# .env
+LANGFLOW_OIDC_ENABLED=true
+LANGFLOW_OIDC_PROVIDER_NAME="Auth0"
+LANGFLOW_OIDC_CLIENT_ID=your-auth0-client-id
+LANGFLOW_OIDC_CLIENT_SECRET=your-auth0-client-secret
+LANGFLOW_OIDC_ISSUER_URL=https://your-tenant.auth0.com
+LANGFLOW_OIDC_REDIRECT_URI=https://your-langflow-domain.com/api/v1/auth/oidc/callback
+```
+
+---
+
+### Keycloak (Self-Hosted)
+
+#### 1. Create Client
+
+1. Login to Keycloak Admin Console
+2. Select your realm (or create a new one)
+3. Go to **Clients** → **Create client**
+4. Configure:
+   - **Client ID**: `langflow`
+   - **Client Protocol**: `openid-connect`
+5. Click **Next**
+
+#### 2. Configure Client Settings
+
+1. **Client authentication**: ON
+2. **Authorization**: OFF (not needed)
+3. **Authentication flow**:
+   - ✅ Standard flow
+   - ✅ Direct access grants (optional)
+4. Click **Next**
+
+#### 3. Configure URLs
+
+1. **Root URL**: `https://your-langflow-domain.com`
+2. **Valid redirect URIs**:
+   - Add: `https://your-langflow-domain.com/api/v1/auth/oidc/callback`
+3. **Web origins**: `https://your-langflow-domain.com`
+4. Click **Save**
+
+#### 4. Get Client Secret
+
+1. Go to **Credentials** tab
+2. Copy the **Client secret**
+
+#### 5. Configure Langflow
+
+```bash
+# .env
+LANGFLOW_OIDC_ENABLED=true
+LANGFLOW_OIDC_PROVIDER_NAME="Keycloak"
+LANGFLOW_OIDC_CLIENT_ID=langflow
+LANGFLOW_OIDC_CLIENT_SECRET=your-keycloak-client-secret
+LANGFLOW_OIDC_ISSUER_URL=https://your-keycloak-domain.com/realms/your-realm
+LANGFLOW_OIDC_REDIRECT_URI=https://your-langflow-domain.com/api/v1/auth/oidc/callback
+```
+
+:::tip
+Replace `your-realm` with your actual Keycloak realm name (often `master` for testing).
+:::
+
+---
+
+### Generic OIDC Provider
+
+Langflow works with any OIDC-compliant provider. Here's a general configuration:
+
+```bash
+# .env
+LANGFLOW_OIDC_ENABLED=true
+LANGFLOW_OIDC_PROVIDER_NAME="Your Provider"
+LANGFLOW_OIDC_CLIENT_ID=your-client-id
+LANGFLOW_OIDC_CLIENT_SECRET=your-client-secret
+LANGFLOW_OIDC_ISSUER_URL=https://your-provider.com
+LANGFLOW_OIDC_REDIRECT_URI=https://your-langflow-domain.com/api/v1/auth/oidc/callback
+LANGFLOW_OIDC_SCOPES="openid profile email"
+```
+
+#### Finding Your Issuer URL
+
+Most OIDC providers expose a discovery document at:
+```
+https://your-provider.com/.well-known/openid-configuration
+```
+
+Look for the `issuer` field in the JSON response.
+
+---
+
+## Security Options
+
+### Enforce SSO-Only Authentication
+
+To disable local username/password authentication and require OIDC:
+
+```bash
+LANGFLOW_OIDC_DISABLE_LOCAL_AUTH=true
+```
+
+This ensures all users must authenticate through your identity provider.
+
+### Emergency Superuser Access
+
+Even with SSO-only mode, you can allow the superuser to login locally for emergency access:
+
+```bash
+LANGFLOW_OIDC_DISABLE_LOCAL_AUTH=true
+LANGFLOW_OIDC_ALLOW_SUPERUSER_LOCAL_AUTH=true  # Default
+```
+
+This provides a safety net if your identity provider becomes unavailable.
+
+### Email Verification
+
+Require users to have verified emails:
+
+```bash
+LANGFLOW_OIDC_REQUIRE_EMAIL_VERIFIED=true  # Default
+```
+
+Langflow will check the `email_verified` claim from your identity provider.
+
+### Auto-Provisioning
+
+Control whether users are automatically created on first login:
+
+```bash
+LANGFLOW_OIDC_AUTO_PROVISION_USERS=true  # Default
+```
+
+If disabled, users must be created manually in Langflow before they can log in via OIDC.
+
+---
+
+## User Management
+
+### How Users Are Created
+
+When a user logs in via OIDC for the first time:
+
+1. Langflow validates the ID token from your identity provider
+2. Checks if an OIDC identity with the same `subject` (sub claim) exists
+3. If not, checks if a user with the same email exists
+4. If no existing user:
+   - Creates a new user (if auto-provisioning is enabled)
+   - Links the OIDC identity to the user
+   - Sets the user as active
+
+### Email Matching
+
+If a user already exists in Langflow with the same email address, the OIDC identity will be linked to that existing user account.
+
+### Multiple Identity Providers
+
+Users can link multiple OIDC identities (e.g., both Azure AD and Google) to the same Langflow account if they share the same email address.
+
+---
+
+## Deployment Examples
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  langflow:
+    image: langflowai/langflow:latest
+    ports:
+      - "7860:7860"
+    environment:
+      # Basic settings
+      LANGFLOW_DATABASE_URL: "postgresql://user:pass@db:5432/langflow"
+
+      # OIDC Configuration
+      LANGFLOW_OIDC_ENABLED: "true"
+      LANGFLOW_OIDC_PROVIDER_NAME: "Azure AD"
+      LANGFLOW_OIDC_CLIENT_ID: "${OIDC_CLIENT_ID}"
+      LANGFLOW_OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET}"
+      LANGFLOW_OIDC_ISSUER_URL: "https://login.microsoftonline.com/${AZURE_TENANT_ID}/v2.0"
+      LANGFLOW_OIDC_REDIRECT_URI: "https://langflow.example.com/api/v1/auth/oidc/callback"
+
+      # Security settings
+      LANGFLOW_OIDC_DISABLE_LOCAL_AUTH: "true"
+      LANGFLOW_OIDC_REQUIRE_EMAIL_VERIFIED: "true"
+```
+
+### Kubernetes
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: langflow-oidc-secret
+type: Opaque
+stringData:
+  client-secret: your-client-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langflow
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: langflow
+        image: langflowai/langflow:latest
+        env:
+        - name: LANGFLOW_OIDC_ENABLED
+          value: "true"
+        - name: LANGFLOW_OIDC_PROVIDER_NAME
+          value: "Google"
+        - name: LANGFLOW_OIDC_CLIENT_ID
+          value: "your-client-id.apps.googleusercontent.com"
+        - name: LANGFLOW_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: langflow-oidc-secret
+              key: client-secret
+        - name: LANGFLOW_OIDC_ISSUER_URL
+          value: "https://accounts.google.com"
+        - name: LANGFLOW_OIDC_REDIRECT_URI
+          value: "https://langflow.example.com/api/v1/auth/oidc/callback"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langflow
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 7860
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: langflow
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - langflow.example.com
+    secretName: langflow-tls
+  rules:
+  - host: langflow.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: langflow
+            port:
+              number: 80
+```
+
+---
+
+## Troubleshooting
+
+### "Invalid state parameter" Error
+
+**Cause**: The state parameter used for CSRF protection has expired or is invalid.
+
+**Solution**:
+- Try logging in again
+- For production deployments with multiple instances, use Redis or a database for state storage instead of in-memory storage
+
+### "Email verification is required" Error
+
+**Cause**: Your identity provider indicates the user's email is not verified.
+
+**Solution**:
+- Ask the user to verify their email with the identity provider
+- Or disable the requirement: `LANGFLOW_OIDC_REQUIRE_EMAIL_VERIFIED=false`
+
+### "User not found and auto-provisioning is disabled" Error
+
+**Cause**: The user doesn't exist in Langflow and auto-provisioning is disabled.
+
+**Solution**:
+- Enable auto-provisioning: `LANGFLOW_OIDC_AUTO_PROVISION_USERS=true`
+- Or manually create the user in Langflow with the same email address
+
+### "Failed to fetch OIDC configuration" Error
+
+**Cause**: Langflow cannot reach the identity provider's discovery endpoint.
+
+**Solution**:
+- Verify `LANGFLOW_OIDC_ISSUER_URL` is correct
+- Check network connectivity from Langflow to the identity provider
+- Manually configure endpoints using `LANGFLOW_OIDC_AUTHORIZATION_ENDPOINT`, etc.
+
+### "Invalid redirect URI" Error
+
+**Cause**: The redirect URI in your identity provider doesn't match the one Langflow is using.
+
+**Solution**:
+- Ensure `LANGFLOW_OIDC_REDIRECT_URI` exactly matches what's configured in your identity provider
+- Check for http vs https, trailing slashes, and port numbers
+
+### Login Button Not Appearing
+
+**Cause**: OIDC is not properly enabled or frontend can't fetch configuration.
+
+**Solution**:
+- Verify `LANGFLOW_OIDC_ENABLED=true`
+- Check browser console for errors
+- Verify the `/api/v1/auth/oidc/config` endpoint is accessible
+
+### HTTPS Required
+
+Most identity providers require HTTPS for redirect URIs in production. For local testing:
+- Use `ngrok` or similar tunnel service
+- Or configure your identity provider to allow http://localhost
+
+---
+
+## Related Documentation
+
+- [API Keys and Authentication](/develop-api-keys-and-authentication)
+- [User Management](/develop-user-management)
+- [Environment Variables](/develop-environment-variables)
+
+---
+
+## Security Best Practices
+
+1. **Always use HTTPS** in production
+2. **Rotate client secrets** regularly
+3. **Restrict redirect URIs** to your actual Langflow domains
+4. **Enable email verification** requirements
+5. **Use short-lived access tokens** (configured in your IdP)
+6. **Enable MFA** in your identity provider
+7. **Monitor login logs** in both Langflow and your IdP
+8. **Store secrets securely** (use secret management tools, not plain text)
+
+:::caution Important
+Never commit OIDC client secrets to version control. Use environment variables or secret management solutions.
+:::

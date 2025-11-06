@@ -7,6 +7,7 @@ from langflow.api.v1.folders import router as folders_router
 from langflow.api.v1.knowledge_bases import router as knowledge_bases_router
 from langflow.api.v1.login import router as login_router
 from langflow.api.v1.mcp import router as mcp_router
+from langflow.api.v1.oidc import router as oidc_router
 from langflow.api.v1.mcp_projects import router as mcp_projects_router
 from langflow.api.v1.monitor import router as monitor_router
 from langflow.api.v1.openai_responses import router as openai_responses_router
@@ -30,6 +31,7 @@ __all__ = [
     "mcp_projects_router",
     "mcp_router",
     "monitor_router",
+    "oidc_router",
     "openai_responses_router",
     "projects_router",
     "starter_projects_router",
