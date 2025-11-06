@@ -100,23 +100,26 @@ async def add_user(db: AsyncSession, user: "UserCreate") -> User:
         ) from e
 
 
-async def update_user(db: AsyncSession, user_id: UUID, update_data: dict) -> User:
+async def update_user_by_id(db: AsyncSession, user_id: UUID, update_data: dict) -> User:
     """Update a user by ID with a dictionary of updates.
 
+    This is a convenience function for updating users with a dict of fields,
+    useful for programmatic updates (e.g., from OIDC authentication).
+
     Args:
-        db: Database session
-        user_id: User ID to update
-        update_data: Dictionary of fields to update
+        db: Database session.
+        user_id: User ID to update.
+        update_data: Dictionary of fields to update (e.g., {"last_login_at": datetime.now()}).
 
     Returns:
-        Updated user object
+        Updated user object.
 
     Raises:
-        HTTPException: If user not found or update fails
+        HTTPException: If user not found or update fails.
     """
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Update fields
     changed = False
@@ -139,6 +142,6 @@ async def update_user(db: AsyncSession, user_id: UUID, update_data: dict) -> Use
         await db.refresh(user)
     except IntegrityError as e:
         await db.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     return user

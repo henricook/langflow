@@ -27,7 +27,14 @@ from langflow.services.deps import get_settings_service, get_variable_service
 router = APIRouter(tags=["OIDC"])
 
 # Temporary in-memory storage for state and nonce
-# TODO: Move to Redis or database for production multi-instance deployments
+# WARNING: This implementation uses in-memory storage which has limitations:
+# - Does not work with multiple Langflow instances (load balancer/k8s replicas)
+# - State is lost on server restart
+# - No automatic cleanup of expired states
+# TODO: For production deployments with multiple instances, implement:
+# - Redis-based state storage with expiration
+# - Database-backed state storage with TTL cleanup
+# - Or stateless JWT-based state parameter
 _oidc_state_storage: dict[str, dict[str, Any]] = {}
 
 

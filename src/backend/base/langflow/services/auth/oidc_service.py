@@ -7,13 +7,12 @@ including Azure AD, Google, Okta, Auth0, Keycloak, and others.
 import secrets
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
 
 import httpx
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from authlib.jose import JsonWebKey, jwt
 from authlib.oidc.core import CodeIDToken
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from loguru import logger
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -25,9 +24,32 @@ from lfx.services.settings.auth import AuthSettings
 
 
 class OIDCConfig:
-    """OIDC provider configuration discovered from the OIDC provider."""
+    """OIDC provider configuration discovered from the OIDC provider.
 
-    def __init__(self, config_data: dict[str, Any]):
+    This class parses and stores the OpenID Connect Discovery document
+    from the provider's .well-known/openid-configuration endpoint.
+
+    Args:
+        config_data: Dictionary containing OIDC configuration from discovery endpoint.
+            Must contain: issuer, authorization_endpoint, token_endpoint, jwks_uri.
+            Optional: userinfo_endpoint, response_types_supported, etc.
+
+    Attributes:
+        issuer: The OIDC issuer URL that identifies the provider.
+        authorization_endpoint: URL where users are redirected for authentication.
+        token_endpoint: URL for exchanging authorization codes for tokens.
+        userinfo_endpoint: Optional URL for fetching additional user information.
+        jwks_uri: URL for retrieving JSON Web Key Set for token verification.
+        response_types_supported: List of OAuth2 response types the provider supports.
+        subject_types_supported: List of subject identifier types supported.
+        id_token_signing_alg_values_supported: List of signing algorithms for ID tokens.
+
+    Raises:
+        KeyError: If required fields are missing from config_data.
+    """
+
+    def __init__(self, config_data: dict[str, Any]) -> None:
+        """Initialize OIDC configuration from discovery document."""
         self.issuer: str = config_data["issuer"]
         self.authorization_endpoint: str = config_data["authorization_endpoint"]
         self.token_endpoint: str = config_data["token_endpoint"]
@@ -41,9 +63,22 @@ class OIDCConfig:
 
 
 class OIDCService:
-    """Service for handling OIDC authentication flows."""
+    """Service for handling OIDC authentication flows.
 
-    def __init__(self, settings: AuthSettings):
+    This service implements the OpenID Connect authorization code flow,
+    including token validation, user provisioning, and identity linking.
+
+    Args:
+        settings: Authentication settings containing OIDC configuration.
+
+    Attributes:
+        settings: The auth settings instance.
+        _config: Cached OIDC provider configuration.
+        _jwks: Cached JSON Web Key Set for token validation.
+    """
+
+    def __init__(self, settings: AuthSettings) -> None:
+        """Initialize OIDC service with authentication settings."""
         self.settings = settings
         self._config: OIDCConfig | None = None
         self._jwks: dict[str, Any] | None = None
@@ -321,7 +356,7 @@ class OIDCService:
 
             # Update user's last login
             user = oidc_identity.user
-            await user_crud.update_user(db, user.id, {"last_login_at": datetime.now(timezone.utc)})
+            await user_crud.update_user_by_id(db, user.id, {"last_login_at": datetime.now(timezone.utc)})
 
             return user
 
@@ -347,7 +382,7 @@ class OIDCService:
             await oidc_crud.create_oidc_identity(db, oidc_identity_create)
 
             # Update user's last login
-            await user_crud.update_user(db, existing_user.id, {"last_login_at": datetime.now(timezone.utc)})
+            await user_crud.update_user_by_id(db, existing_user.id, {"last_login_at": datetime.now(timezone.utc)})
 
             return existing_user
 
@@ -371,7 +406,7 @@ class OIDCService:
         new_user = await user_crud.add_user(db, user_create)
 
         # Activate user automatically for OIDC users
-        await user_crud.update_user(
+        await user_crud.update_user_by_id(
             db,
             new_user.id,
             {
