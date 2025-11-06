@@ -462,6 +462,82 @@ If a user already exists in Langflow with the same email address, the OIDC ident
 
 Users can link multiple OIDC identities (e.g., both Azure AD and Google) to the same Langflow account if they share the same email address.
 
+## Audit Logging
+
+Langflow automatically tracks all OIDC authentication events in the audit log database for security monitoring, compliance, and troubleshooting.
+
+### Events Tracked
+
+The following OIDC-related events are logged:
+
+- **OIDC Login Success**: User successfully authenticated via OIDC
+- **OIDC Login Failure**: Authentication attempt failed (with reason)
+- **OIDC User Provisioned**: New user was auto-provisioned from OIDC
+- **OIDC Identity Linked**: OIDC identity linked to existing user account
+
+### Audit Log Information
+
+Each audit log entry captures:
+
+- **Event type and result**: What happened and whether it succeeded
+- **User information**: User ID and username (email)
+- **Request metadata**: IP address and user agent
+- **Provider information**: OIDC provider name and issuer
+- **Failure details**: Specific reason if authentication failed
+- **Timestamp**: When the event occurred (immutable)
+- **Additional metadata**: OIDC claims, error details, etc.
+
+### Common Failure Reasons
+
+Authentication failures are logged with specific reasons:
+
+- `"Invalid or expired state parameter (possible CSRF attack)"` - State validation failed
+- `"OIDC provider error: [error]"` - Identity provider returned an error
+- `"Email verification is required"` - User's email not verified by IdP
+- `"User not found and auto-provisioning is disabled"` - User doesn't exist and can't be created
+- `"OIDC callback failed: [error]"` - Unexpected error during authentication flow
+
+### Security Monitoring
+
+Audit logs enable you to:
+
+- **Detect suspicious activity**: Monitor failed login attempts by IP or user
+- **Track user provisioning**: See when new users are auto-created from OIDC
+- **Debug authentication issues**: View detailed error information with timestamps
+- **Compliance reporting**: Export authentication events for audit purposes
+- **Provider insights**: Track which identity providers users are using
+
+### Example Queries
+
+You can query the `auditlog` table directly:
+
+```sql
+-- Failed OIDC login attempts in the last 24 hours
+SELECT username, ip_address, failure_reason, created_at
+FROM auditlog
+WHERE event_type = 'oidc_login_failure'
+  AND created_at > NOW() - INTERVAL '24 hours'
+ORDER BY created_at DESC;
+
+-- Users provisioned via OIDC this month
+SELECT username, provider_name, created_at
+FROM auditlog
+WHERE event_type = 'oidc_user_provisioned'
+  AND created_at > DATE_TRUNC('month', NOW())
+ORDER BY created_at DESC;
+
+-- Authentication activity for a specific user
+SELECT event_type, result, provider_name, ip_address, created_at
+FROM auditlog
+WHERE username = 'user@example.com'
+ORDER BY created_at DESC
+LIMIT 50;
+```
+
+:::info
+Future versions of Langflow will include a web UI for viewing and filtering audit logs. Currently, you can access audit logs directly through the database or export them for analysis with your preferred security information and event management (SIEM) system.
+:::
+
 ---
 
 ## Deployment Examples

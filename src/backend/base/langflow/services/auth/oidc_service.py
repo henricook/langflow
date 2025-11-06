@@ -16,6 +16,7 @@ from fastapi import HTTPException, status
 from loguru import logger
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from langflow.services.auth.audit_service import AuditService
 from langflow.services.database.models.oidc_identity import crud as oidc_crud
 from langflow.services.database.models.oidc_identity.model import OIDCIdentityCreate, OIDCIdentityUpdate
 from langflow.services.database.models.user import crud as user_crud
@@ -384,6 +385,19 @@ class OIDCService:
             # Update user's last login
             await user_crud.update_user_by_id(db, existing_user.id, {"last_login_at": datetime.now(timezone.utc)})
 
+            # Log identity linking event
+            await AuditService.log_oidc_identity_linked(
+                db=db,
+                user_id=existing_user.id,
+                username=email,
+                provider_name=self.settings.OIDC_PROVIDER_NAME or "OIDC",
+                metadata={
+                    "issuer": issuer,
+                    "provider_user_id": provider_user_id,
+                    "email_verified": email_verified,
+                },
+            )
+
             return existing_user
 
         # Auto-provision new user if enabled
@@ -433,6 +447,20 @@ class OIDCService:
         )
 
         await oidc_crud.create_oidc_identity(db, oidc_identity_create)
+
+        # Log user provisioning event
+        await AuditService.log_oidc_user_provisioned(
+            db=db,
+            user_id=new_user.id,
+            username=email,
+            provider_name=self.settings.OIDC_PROVIDER_NAME or "OIDC",
+            metadata={
+                "issuer": issuer,
+                "provider_user_id": provider_user_id,
+                "email_verified": email_verified,
+                "name": name,
+            },
+        )
 
         logger.info(f"Successfully created new user from OIDC: {email}")
         return new_user

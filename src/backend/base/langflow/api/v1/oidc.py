@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from langflow.api.utils import DbSession
 from langflow.api.v1.schemas import Token
 from langflow.initial_setup.setup import get_or_create_default_folder
+from langflow.services.auth.audit_service import AuditService
 from langflow.services.auth.oidc_service import OIDCService
 from langflow.services.auth.utils import create_user_tokens
 from langflow.services.deps import get_settings_service, get_variable_service
@@ -127,6 +128,7 @@ async def oidc_login():
 @router.get("/auth/oidc/callback")
 async def oidc_callback(
     response: Response,
+    request: Request,
     db: DbSession,
     code: str = Query(..., description="Authorization code from OIDC provider"),
     state: str = Query(..., description="State parameter for CSRF protection"),
@@ -143,6 +145,15 @@ async def oidc_callback(
     # Check for errors from OIDC provider
     if error:
         logger.error(f"OIDC provider returned error: {error} - {error_description}")
+        # Log audit event for OIDC provider error
+        await AuditService.log_oidc_login_failure(
+            db=db,
+            username=None,
+            failure_reason=f"OIDC provider error: {error}",
+            provider_name=auth_settings.OIDC_PROVIDER_NAME or "Unknown",
+            request=request,
+            metadata={"error": error, "error_description": error_description},
+        )
         # Redirect to frontend with error
         frontend_url = "/"  # TODO: Make this configurable
         error_params = urlencode({"error": error, "error_description": error_description or ""})
@@ -154,6 +165,15 @@ async def oidc_callback(
     # Validate state parameter (CSRF protection)
     if state not in _oidc_state_storage:
         logger.error("Invalid or expired state parameter")
+        # Log audit event for state validation failure
+        await AuditService.log_oidc_login_failure(
+            db=db,
+            username=None,
+            failure_reason="Invalid or expired state parameter (possible CSRF attack)",
+            provider_name=auth_settings.OIDC_PROVIDER_NAME or "Unknown",
+            request=request,
+            metadata={"state": state},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired state parameter",
@@ -220,6 +240,19 @@ async def oidc_callback(
         await get_variable_service().initialize_user_variables(user.id, db)
         await get_or_create_default_folder(db, user.id)
 
+        # Log successful OIDC login
+        await AuditService.log_oidc_login_success(
+            db=db,
+            user_id=user.id,
+            username=user.username,
+            provider_name=auth_settings.OIDC_PROVIDER_NAME or "Unknown",
+            request=request,
+            metadata={
+                "email": id_token_claims.get("email"),
+                "issuer": id_token_claims.get("iss"),
+            },
+        )
+
         # Redirect to frontend
         frontend_url = "/"  # TODO: Make this configurable
         logger.info(f"OIDC login successful for user: {user.username}")
@@ -230,6 +263,15 @@ async def oidc_callback(
         raise
     except Exception as e:
         logger.error(f"Failed to complete OIDC callback: {e}")
+        # Log audit event for unexpected failure
+        await AuditService.log_oidc_login_failure(
+            db=db,
+            username=None,
+            failure_reason=f"OIDC callback failed: {str(e)}",
+            provider_name=auth_settings.OIDC_PROVIDER_NAME or "Unknown",
+            request=request,
+            metadata={"error_type": type(e).__name__},
+        )
         # Redirect to frontend with error
         frontend_url = "/"
         error_params = urlencode({"error": "authentication_failed", "error_description": str(e)})
